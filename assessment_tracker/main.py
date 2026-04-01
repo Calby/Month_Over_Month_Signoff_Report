@@ -6,10 +6,17 @@ import sys
 
 
 def main():
+    app_dir = os.path.dirname(os.path.abspath(__file__))
+    input_dir = os.path.join(app_dir, "input")
+    output_dir = os.path.join(app_dir, "output")
+    os.makedirs(input_dir, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
+
     root = tk.Tk()
     root.withdraw()
     filepath = filedialog.askopenfilename(
         title="Select CaseWorthy Export",
+        initialdir=input_dir,
         filetypes=[("Excel files", "*.xlsx *.xls")],
     )
     if not filepath:
@@ -21,7 +28,6 @@ def main():
     from report_builder import build_report
 
     data = process_data(filepath)
-    output_dir = os.path.dirname(filepath)
     output_path = build_report(data, output_dir=output_dir)
 
     print(f"Report saved: {output_path}")
