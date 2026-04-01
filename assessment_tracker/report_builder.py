@@ -10,14 +10,17 @@ from openpyxl.utils import get_column_letter
 
 from config import (
     BASELINE_DATE, OFFICE_COL, OUTPUT_FILENAME,
-    HEADER_DARK_BLUE, HEADER_MED_BLUE, HEADER_FONT_COLOR,
-    INCREASE_FILL, DECREASE_FILL,
+    HEADER_DARK_BLUE, HEADER_MED_BLUE, HEADER_ALT_BLUE, HEADER_ALT_MED,
+    HEADER_FONT_COLOR, INCREASE_FILL, DECREASE_FILL,
     OFFICE_COL_WIDTH, BASELINE_COL_WIDTH, METRIC_COL_WIDTH,
+    RAW_DATA_COLUMNS,
 )
 
 # Reusable styles
 _dark_fill = PatternFill(start_color=HEADER_DARK_BLUE, end_color=HEADER_DARK_BLUE, fill_type="solid")
 _med_fill = PatternFill(start_color=HEADER_MED_BLUE, end_color=HEADER_MED_BLUE, fill_type="solid")
+_alt_fill = PatternFill(start_color=HEADER_ALT_BLUE, end_color=HEADER_ALT_BLUE, fill_type="solid")
+_alt_med_fill = PatternFill(start_color=HEADER_ALT_MED, end_color=HEADER_ALT_MED, fill_type="solid")
 _white_bold = Font(color=HEADER_FONT_COLOR, bold=True)
 _white_font = Font(color=HEADER_FONT_COLOR)
 _bold_font = Font(bold=True)
@@ -34,7 +37,7 @@ def _month_label(year, month):
 
 
 def _build_summary_sheet(wb, data):
-    """Sheet 1: Summary — main backlog tracker table."""
+    """Sheet 1: Summary — main backlog tracker table with legend."""
     ws = wb.active
     ws.title = "Summary"
 
@@ -56,8 +59,6 @@ def _build_summary_sheet(wb, data):
             value=f"Generated: {gen_date} | Data baseline: Aug 29, 2025 | Source: CaseWorthy Export")
 
     # Row 4-5: Headers
-    # Col A = Office, Col B = Aug 29 Baseline
-    # Then for each month: New, Signed Off, Pending, End Backlog, Delta (5 cols)
     header_row = 4
     sub_row = 5
     data_start_row = 6
@@ -79,23 +80,27 @@ def _build_summary_sheet(wb, data):
         c.alignment = Alignment(horizontal="center")
         c.border = _thin_border
 
-    col = 3  # start of monthly columns
+    col = 3
     month_col_starts = {}
     sub_labels = ["New", "Signed Off", "Pending", "End Backlog", "Delta"]
-    for year, month in months:
+    for m_idx, (year, month) in enumerate(months):
         label = _month_label(year, month)
         month_col_starts[(year, month)] = col
+        # Alternate colors between months
+        is_alt = m_idx % 2 == 1
+        top_fill = _alt_fill if is_alt else _dark_fill
+        sub_fill = _alt_med_fill if is_alt else _med_fill
         # Merge month header across 5 cols
         ws.merge_cells(start_row=header_row, start_column=col,
                        end_row=header_row, end_column=col + 4)
         h = ws.cell(row=header_row, column=col, value=label)
-        h.fill = _dark_fill
+        h.fill = top_fill
         h.font = _white_bold
         h.alignment = Alignment(horizontal="center")
         h.border = _thin_border
         for i, sub in enumerate(sub_labels):
             sc = ws.cell(row=sub_row, column=col + i, value=sub)
-            sc.fill = _med_fill
+            sc.fill = sub_fill
             sc.font = _white_font
             sc.alignment = Alignment(horizontal="center")
             sc.border = _thin_border
@@ -109,7 +114,7 @@ def _build_summary_sheet(wb, data):
         oc.border = _thin_border
         ws.cell(row=row, column=2, value=int(baseline[office])).border = _thin_border
 
-        prev_backlog_col = 2  # baseline column for first month's delta
+        prev_backlog_col = 2
         for year, month in months:
             c = month_col_starts[(year, month)]
             md = monthly_data[(year, month)]
@@ -119,7 +124,6 @@ def _build_summary_sheet(wb, data):
             backlog_cell = ws.cell(row=row, column=c + 3, value=int(md["eom_backlog"][office]))
             backlog_cell.border = _thin_border
 
-            # Delta = End Backlog - Prior Backlog (Excel formula)
             bl_col_letter = get_column_letter(c + 3)
             prev_col_letter = get_column_letter(prev_backlog_col)
             delta_cell = ws.cell(row=row, column=c + 4)
@@ -152,7 +156,6 @@ def _build_summary_sheet(wb, data):
     tc.font = Font(bold=True, size=11)
     tc.border = _thin_border
 
-    # Baseline total
     bl_letter = get_column_letter(2)
     ws.cell(row=totals_row, column=2,
             value=f"=SUM({bl_letter}{data_start_row}:{bl_letter}{totals_row - 1})")
@@ -168,6 +171,49 @@ def _build_summary_sheet(wb, data):
             cell.font = _bold_font
             cell.border = _thin_border
 
+    # --- Legend / Instructions ---
+    legend_start = totals_row + 3
+    ws.merge_cells(start_row=legend_start, start_column=1,
+                   end_row=legend_start, end_column=6)
+    lh = ws.cell(row=legend_start, column=1, value="Column Definitions")
+    lh.font = Font(size=13, bold=True)
+
+    definitions = [
+        ("Baseline Backlog", "Number of assessments needing sign-off as of August 29, 2025 — the starting point for tracking."),
+        ("New", "Assessments with a Begin Date in that month. These are newly created assessments entering the queue."),
+        ("Signed Off", "Assessments approved (signed off) during that month, based on the Assessment.LastModifiedDate."),
+        ("Pending", "Assessments marked as reviewed but with a \"Pending Approval\" status — they are NOT fully signed off and still count toward the backlog."),
+        ("End Backlog", "Total assessments still awaiting sign-off at the end of that month. This is the cumulative backlog."),
+        ("Delta", "Change in backlog compared to the prior month. Negative values (green) = backlog is shrinking. Positive values (red) = backlog is growing."),
+    ]
+
+    for i, (term, desc) in enumerate(definitions):
+        r = legend_start + 1 + i
+        tc = ws.cell(row=r, column=1, value=term)
+        tc.font = _bold_font
+        ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=6)
+        ws.cell(row=r, column=2, value=desc)
+
+    color_start = legend_start + len(definitions) + 2
+    ws.merge_cells(start_row=color_start, start_column=1,
+                   end_row=color_start, end_column=6)
+    ch = ws.cell(row=color_start, column=1, value="Color Key")
+    ch.font = Font(size=13, bold=True)
+
+    gr = ws.cell(row=color_start + 1, column=1, value="   ")
+    gr.fill = _green_fill
+    ws.merge_cells(start_row=color_start + 1, start_column=2,
+                   end_row=color_start + 1, end_column=6)
+    ws.cell(row=color_start + 1, column=2,
+            value="Green — Backlog decreased from the prior month (improvement)")
+
+    rr = ws.cell(row=color_start + 2, column=1, value="   ")
+    rr.fill = _red_fill
+    ws.merge_cells(start_row=color_start + 2, start_column=2,
+                   end_row=color_start + 2, end_column=6)
+    ws.cell(row=color_start + 2, column=2,
+            value="Red — Backlog increased from the prior month (falling behind)")
+
     # Column widths
     ws.column_dimensions["A"].width = OFFICE_COL_WIDTH
     ws.column_dimensions["B"].width = BASELINE_COL_WIDTH
@@ -176,7 +222,6 @@ def _build_summary_sheet(wb, data):
         for offset in range(5):
             ws.column_dimensions[get_column_letter(c + offset)].width = METRIC_COL_WIDTH
 
-    # Freeze panes: freeze row 5 and column A
     ws.freeze_panes = "B6"
 
 
@@ -191,22 +236,30 @@ def _build_trend_chart_sheet(wb, data):
 
     # Top 10 by baseline backlog
     top10 = baseline.sort_values(ascending=False).head(10).index.tolist()
-
-    # Build hidden data table
-    # Row 1: headers — blank, then month labels
-    ws.cell(row=1, column=1, value="Office")
-    ws.cell(row=1, column=2, value="Aug 29 Baseline")
-    for i, (year, month) in enumerate(months):
-        ws.cell(row=1, column=3 + i, value=_month_label(year, month))
-
-    for r, office in enumerate(top10, start=2):
-        ws.cell(row=r, column=1, value=office)
-        ws.cell(row=r, column=2, value=int(baseline[office]))
-        for i, (year, month) in enumerate(months):
-            ws.cell(row=r, column=3 + i, value=int(monthly_data[(year, month)]["eom_backlog"][office]))
-
-    num_data_cols = 1 + len(months)  # baseline + months
     num_rows = len(top10)
+    num_time_points = 1 + len(months)  # baseline + each month
+
+    # Data table in COLUMN layout (openpyxl charts work best this way)
+    # Col A = time labels, Col B = office 1, Col C = office 2, etc.
+    ws.cell(row=1, column=1, value="Month")
+    for i, office in enumerate(top10):
+        ws.cell(row=1, column=2 + i, value=office)
+
+    # Row 2 = baseline
+    ws.cell(row=2, column=1, value="Aug 29 Baseline")
+    for i, office in enumerate(top10):
+        ws.cell(row=2, column=2 + i, value=int(baseline[office]))
+
+    # Rows 3+ = each month
+    for m_idx, (year, month) in enumerate(months):
+        row = 3 + m_idx
+        ws.cell(row=row, column=1, value=_month_label(year, month))
+        for i, office in enumerate(top10):
+            ws.cell(row=row, column=2 + i,
+                    value=int(monthly_data[(year, month)]["eom_backlog"][office]))
+
+    last_data_row = 2 + len(months)
+    last_data_col = 1 + num_rows
 
     chart = LineChart()
     chart.title = "Backlog Trend by Office"
@@ -216,18 +269,16 @@ def _build_trend_chart_sheet(wb, data):
     chart.width = 28
     chart.height = 16
 
-    cats = Reference(ws, min_col=2, max_col=1 + num_data_cols, min_row=1)
-    for r in range(2, 2 + num_rows):
-        values = Reference(ws, min_col=2, max_col=1 + num_data_cols, min_row=r)
-        chart.add_data(values, from_rows=True, titles_from_data=False)
-        chart.series[-1].name = ws.cell(row=r, column=1).value
-
+    # Categories = month labels in col A
+    cats = Reference(ws, min_col=1, min_row=2, max_row=last_data_row)
+    # Data = each office column (with header as series name)
+    data_ref = Reference(ws, min_col=2, max_col=last_data_col,
+                         min_row=1, max_row=last_data_row)
+    chart.add_data(data_ref, titles_from_data=True)
     chart.set_categories(cats)
-    ws.add_chart(chart, f"A{2 + num_rows + 2}")
 
-    # Hide the data rows (just set row height very small — openpyxl can't truly hide)
-    for r in range(1, 2 + num_rows):
-        ws.row_dimensions[r].hidden = True
+    chart_row = last_data_row + 2
+    ws.add_chart(chart, f"A{chart_row}")
 
 
 def _build_activity_chart_sheet(wb, data):
@@ -242,12 +293,13 @@ def _build_activity_chart_sheet(wb, data):
     ws.cell(row=1, column=2, value="New Assessments")
     ws.cell(row=1, column=3, value="Signed Off")
 
-    for i, (year, month) in enumerate(months, start=2):
-        ws.cell(row=i, column=1, value=_month_label(year, month))
-        ws.cell(row=i, column=2, value=int(monthly_data[(year, month)]["new"].sum()))
-        ws.cell(row=i, column=3, value=int(monthly_data[(year, month)]["signed_off"].sum()))
+    for i, (year, month) in enumerate(months):
+        row = 2 + i
+        ws.cell(row=row, column=1, value=_month_label(year, month))
+        ws.cell(row=row, column=2, value=int(monthly_data[(year, month)]["new"].sum()))
+        ws.cell(row=row, column=3, value=int(monthly_data[(year, month)]["signed_off"].sum()))
 
-    num_months = len(months)
+    last_data_row = 1 + len(months)
 
     chart = BarChart()
     chart.type = "col"
@@ -258,16 +310,13 @@ def _build_activity_chart_sheet(wb, data):
     chart.width = 24
     chart.height = 14
 
-    cats = Reference(ws, min_col=1, min_row=2, max_row=1 + num_months)
-    data_ref = Reference(ws, min_col=2, max_col=3, min_row=1, max_row=1 + num_months)
+    cats = Reference(ws, min_col=1, min_row=2, max_row=last_data_row)
+    data_ref = Reference(ws, min_col=2, max_col=3, min_row=1, max_row=last_data_row)
     chart.add_data(data_ref, titles_from_data=True)
     chart.set_categories(cats)
-    chart.shape = 4
 
-    ws.add_chart(chart, f"A{num_months + 4}")
-
-    for r in range(1, num_months + 2):
-        ws.row_dimensions[r].hidden = True
+    chart_row = last_data_row + 2
+    ws.add_chart(chart, f"A{chart_row}")
 
 
 def _build_detail_sheet(wb, data):
@@ -302,20 +351,22 @@ def _build_detail_sheet(wb, data):
 
 
 def _build_raw_data_sheet(wb, data):
-    """Sheet 5: Raw Data — filtered & deduplicated with classification columns."""
+    """Sheet 5: Raw Data — only report-relevant columns."""
     ws = wb.create_sheet("Raw Data")
 
     raw = data["raw"]
-    headers = list(raw.columns)
+    # Only include columns relevant to this report
+    columns = [c for c in RAW_DATA_COLUMNS if c in raw.columns]
+    filtered = raw[columns]
 
-    for i, h in enumerate(headers, start=1):
+    for i, h in enumerate(columns, start=1):
         c = ws.cell(row=1, column=i, value=h)
         c.fill = _dark_fill
         c.font = _white_bold
         c.border = _thin_border
 
-    for r_idx, (_, row) in enumerate(raw.iterrows(), start=2):
-        for c_idx, col in enumerate(headers, start=1):
+    for r_idx, (_, row) in enumerate(filtered.iterrows(), start=2):
+        for c_idx, col in enumerate(columns, start=1):
             val = row[col]
             if pd.isna(val):
                 val = ""
