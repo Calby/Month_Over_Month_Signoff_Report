@@ -46,18 +46,24 @@ def exclude_programs(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def apply_program_office_mapping(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Map program names to offices. Returns (mapped_df, unmapped_df).
+    """Assign offices using CaseWorthy first, then program mapping as fallback.
 
-    Records whose program is in PROGRAM_TO_OFFICE get that office assigned
-    (overriding whatever CaseWorthy had). Records whose program is NOT in the
-    mapping are separated out as 'needs attention' for manual review.
+    Logic:
+    1. If the program is in PROGRAM_TO_OFFICE (known program):
+       - Use CaseWorthy Office Location if present
+       - Fall back to mapping if Office Location is missing/blank
+    2. If the program is NOT in PROGRAM_TO_OFFICE:
+       - Separated as 'needs attention' for manual review
+
+    Returns (mapped_df, unmapped_df).
     """
     known = df[PROGRAM_COL].isin(PROGRAM_TO_OFFICE)
     mapped_df = df[known].copy()
     unmapped_df = df[~known].copy()
 
-    # Override office from the mapping
-    mapped_df[OFFICE_COL] = mapped_df[PROGRAM_COL].map(PROGRAM_TO_OFFICE)
+    # Only fill in the mapping where CaseWorthy office is missing
+    office_missing = mapped_df[OFFICE_COL].isna() | (mapped_df[OFFICE_COL].astype(str).str.strip() == "")
+    mapped_df.loc[office_missing, OFFICE_COL] = mapped_df.loc[office_missing, PROGRAM_COL].map(PROGRAM_TO_OFFICE)
 
     return mapped_df.reset_index(drop=True), unmapped_df.reset_index(drop=True)
 

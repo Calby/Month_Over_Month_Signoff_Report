@@ -171,22 +171,28 @@ def test_exclude_programs():
 
 
 def test_program_office_mapping():
-    """Program mapping should override CaseWorthy office; unmapped goes to needs attention."""
+    """CaseWorthy office takes priority; mapping is fallback for missing offices."""
     rows = [
-        # Known program — should map to Tampa Office - SSVF regardless of CaseWorthy office
-        make_row(1, 100, "Tampa-VA Sup Services-P3-SSVF-Prevention 1010", "T", "2025-09-01", None, "Wrong Office", "No", ""),
-        # Known program with NaN office — should still get mapped
+        # Known program WITH CaseWorthy office — should KEEP CaseWorthy office
+        make_row(1, 100, "Tampa-VA Sup Services-P3-SSVF-Prevention 1010", "T", "2025-09-01", None, "Some CW Office", "No", ""),
+        # Known program with NaN office — should fall back to mapping
         make_row(2, 200, "Polk-CoC-Returning Home 1050", "T", "2025-09-01", None, np.nan, "No", ""),
+        # Known program with empty string office — should fall back to mapping
+        make_row(3, 300, "Sarasota-CoC-Returning Home 1051", "T", "2025-09-01", None, "", "No", ""),
         # Unknown program — should go to unmapped
-        make_row(3, 300, "Some Unknown Program", "T", "2025-09-01", None, "O1", "No", ""),
+        make_row(4, 400, "Some Unknown Program", "T", "2025-09-01", None, "O1", "No", ""),
     ]
     df = pd.DataFrame(rows)
     mapped, unmapped = apply_program_office_mapping(df)
 
-    assert len(mapped) == 2
+    assert len(mapped) == 3
     assert len(unmapped) == 1
-    assert mapped.iloc[0][OFFICE_COL] == "Tampa Office - SSVF"
-    assert mapped.iloc[1][OFFICE_COL] == "Lakeland Office"
+    # CaseWorthy office preserved when present
+    assert mapped.iloc[0][OFFICE_COL] == "Some CW Office", f"Expected CW office, got {mapped.iloc[0][OFFICE_COL]}"
+    # Mapping used as fallback when office is missing
+    assert mapped.iloc[1][OFFICE_COL] == "Lakeland Office", f"Expected fallback, got {mapped.iloc[1][OFFICE_COL]}"
+    assert mapped.iloc[2][OFFICE_COL] == "Sarasota Office", f"Expected fallback, got {mapped.iloc[2][OFFICE_COL]}"
+    # Unknown goes to unmapped
     assert unmapped.iloc[0][PROGRAM_COL] == "Some Unknown Program"
     print("  PASS: program_office_mapping")
 

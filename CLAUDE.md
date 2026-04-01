@@ -59,9 +59,12 @@ assessment_tracker/
   - Updated Pending definition: sent back to case manager for review/changes
 - Month headers alternate between dark blue and lighter blue for visual separation
 
-- Added program-to-office mapping in config.py (overrides CaseWorthy Office Location)
-  - 70+ programs mapped to their correct office
+- Added program-to-office mapping in config.py (fallback when CaseWorthy office is missing)
+  - CaseWorthy Office Location is used first; mapping fills gaps only
+  - 90+ programs mapped to their correct office
   - 12 SSVF-EHA + Bob Woodruff programs excluded from report entirely
+  - Added new programs: Sarasota SPEH/Manatee, San Juan SSVF, Charlotte ESG,
+    MidFlorida Challenge/Coalition, Orlando ESG, Pasco PSH, Polk ESG, Tampa CDBG
   - Records with unmapped programs go to a "Needs Attention" sheet
   - Needs Attention sheet includes instructions for CaseWorthy cleanup
 - Removed "Unassigned" catch-all — office is now determined by program name

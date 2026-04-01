@@ -31,7 +31,8 @@ EXCLUDED_PROGRAMS = [
     "Bob Woodruff-All County-Assistance & SEHA 6004",
 ]
 
-# Program → Office mapping (overrides CaseWorthy Office Location)
+# Program → Office mapping (fallback when CaseWorthy Office Location is missing)
+# CaseWorthy source data takes priority; this fills in the gaps.
 PROGRAM_TO_OFFICE = {
     "All-County-VA-Suicide-Prevention 1114": "SSG Fox",
 
@@ -42,16 +43,24 @@ PROGRAM_TO_OFFICE = {
     "Charlotte-Care Center-Individual Shelter": "Port Charlotte Care Center Shelter",
     "Charlotte-Challenge RRH 1200": "Port Charlotte Office",
     "Charlotte-DEO-Recovery Grant-RRH 1216": "Port Charlotte Office",
+    "Charlotte-ESG RRH 1222": "Port Charlotte Office",
     "Charlotte-SW-HUD-CoC-DV RRH 1123": "Port Charlotte Office",
     "Charlotte-VA Sup Services-SSVF-Prevention 1010": "Port Charlotte Office",
     "Charlotte-VA Supportive Services-SSVF-RRH 1010": "Port Charlotte Office",
 
     "Citrus Mid FL-HUD-CoC-RRH 1142": "Citrus Office",
     "Lake Mid FL-HUD-CoC-RRH 1142": "Citrus Office",
+    "Lake Mid Florida-Coalition-ESG-SEHA 1030": "Citrus Office",
+    "MidFlorida-Challenge-HP 19-22-Prevention 1036": "Citrus Office",
+    "MidFlorida-Challenge-RRH 19-22-RRH 1036": "Citrus Office",
+    "MidFlorida-Coalition-ESG RUSH-Prevention 1138": "Citrus Office",
+    "MidFlorida-Coalition-ESG RUSH-RRH 1138": "Citrus Office",
     "MidFlorida-HUD-CoC-Consolidated-RRH 1175": "Citrus Office",
+    "MidFlorida-HUD-CoC-PSH 1340": "Lake Office",
     "MidFlorida-VA Sup Services-SSVF-Prevention 1010": "Citrus Office",
     "MidFlorida-VA Supportive Services-SSVF-RRH 1010": "Citrus Office",
 
+    "Orlando-Orange County-ESG-RRH 1336": "Orlando Office",
     "Orlando-Seminole-County-HOME ARP-RRH 1315": "Orlando Office",
     "Orlando-VA Sup Services-SSVF-Prevention 1010": "Orlando Office",
     "Orlando-VA Supportive Services-SSVF-RRH 1010": "Orlando Office",
@@ -59,6 +68,7 @@ PROGRAM_TO_OFFICE = {
     "Pasco-HUD-CoC-Bonus RRH 1120": "New Port Richey Office",
     "Pasco-HUD-CoC-Consolidated RRH 1122": "New Port Richey Office",
     "Pasco-HUD-CoC-DV RRH 1121": "New Port Richey Office",
+    "Pasco-HUD-CoC-PSH 1341": "New Port Richey Office",
     "Pasco-VA Sup Services-Renew-SSVF-Prevention 1010": "New Port Richey Office",
     "Pasco-VA Supportive Services-Renew-SSVF-RRH 1010": "New Port Richey Office",
 
@@ -92,11 +102,21 @@ PROGRAM_TO_OFFICE = {
     "Polk-County-ESG RUSH RRH 1230": "Lakeland Office",
     "Polk-VA Sup Services-P5-SSVF-Prevention 1010": "Lakeland Office",
     "Polk-VA Supportive Services-P5-SSVF-RRH 1010": "Lakeland Office",
+    "Polk\u2013County-ESG-Rapid Rehousing RRH 1144": "Lakeland Office",
+
+    "San Juan-VA Sup Services-P2-SSVF-Prevention 3030": "San Juan Office",
+    "San Juan-VA Supportive Services-P2-SSVF-RRH 3030": "San Juan Office",
 
     "Sarasota & Manatee-Suncoast-ESG-RRH 1025": "Sarasota Office",
     "Sarasota-CoC-Returning Home 1051": "Sarasota Office",
+    "Sarasota-County-ESG-RRH 1245": "Sarasota Office",
     "Sarasota-County-HSAC SEHA 1185": "Sarasota Office",
     "Sarasota-County-HSAC-RRH Essentials 1250": "Sarasota Office",
+    "Sarasota-Manatee-County-CDBG SEHA 1265": "Sarasota Office",
+    "Sarasota-Manatee-RRH 1334": "Sarasota Office",
+    "Sarasota-Manatee-SPEH-ESG-RRH 1350": "Sarasota Office",
+    "Sarasota-SPEH-Challenge-RRH 1351": "Sarasota Office",
+    "Sarasota-SPEH-RUSH-RRH 1352": "Sarasota Office",
     "Sarasota-VA Sup Services-SSVF-Prevention 1010": "Sarasota Office",
     "Sarasota-VA Supportive Services-SSVF-RRH 1010": "Sarasota Office",
 
@@ -107,6 +127,7 @@ PROGRAM_TO_OFFICE = {
     "SouthWest-VA Supportive Services-SSVF-RRH 1010": "Fort Myers Office",
 
     "Tampa-Hillsborough-County-RUSH RRH 1326": "Tampa Office - Non Veteran",
+    "Tampa-THHI-CDBG DAP CES 1107": "Tampa Office - Non Veteran",
     "Tampa-THHI-ESG DAP CES 1107": "Tampa Office - Non Veteran",
     "Tampa-THHI-State-ESG RUSH RRH 1325": "Tampa Office - Non Veteran",
     "Tampa-THHI-State-ESG-RUSH SEHA 1325": "Tampa Office - Non Veteran",
