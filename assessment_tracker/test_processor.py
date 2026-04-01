@@ -3,8 +3,8 @@ import pandas as pd
 import numpy as np
 import sys
 sys.path.insert(0, ".")
-from processor import deduplicate, classify, clean_offices, _backlog_at_date, build_monthly_table
-from config import DEDUP_KEYS, SIGNOFF_DATE_COL, BEGIN_DATE_COL, OFFICE_COL, REVIEWED_COL, STATUS_COL
+from processor import deduplicate, classify, exclude_programs, apply_program_office_mapping, _backlog_at_date, build_monthly_table
+from config import DEDUP_KEYS, SIGNOFF_DATE_COL, BEGIN_DATE_COL, OFFICE_COL, REVIEWED_COL, STATUS_COL, PROGRAM_COL
 
 
 def make_row(client_id, assess_id, program, assess_type, begin, modified,
@@ -95,7 +95,7 @@ def test_backlog_at_date():
     ]
     df = pd.DataFrame(rows)
     df = classify(df)
-    df = clean_offices(df)
+    df[OFFICE_COL] = df[OFFICE_COL].fillna("Unassigned")
 
     baseline = pd.Timestamp("2025-08-29")
     backlog = _backlog_at_date(df, baseline)
@@ -130,7 +130,7 @@ def test_monthly_table():
     from processor import deduplicate as dd
     df = dd(df)
     df = classify(df)
-    df = clean_offices(df)
+    df[OFFICE_COL] = df[OFFICE_COL].fillna("Unassigned")
     result = build_monthly_table(df)
 
     assert "OfficeA" in result["offices"]
@@ -155,16 +155,40 @@ def test_monthly_table():
     print("  PASS: monthly_table")
 
 
-def test_nan_office_handling():
-    """Ensure NaN offices become 'Unassigned'."""
+def test_exclude_programs():
+    """Excluded programs should be removed from the dataset."""
     rows = [
-        make_row(1, 100, "P", "T", "2025-09-01", None, np.nan, "No", ""),
-        make_row(2, 200, "P", "T", "2025-09-01", None, None, "No", ""),
+        make_row(1, 100, "Charlotte-VA Supportive Services-SSVF-EHA", "T", "2025-09-01", None, "O1", "No", ""),
+        make_row(2, 200, "Tampa-VA Sup Services-P3-SSVF-Prevention 1010", "T", "2025-09-01", None, "O1", "No", ""),
+        make_row(3, 300, "Bob Woodruff-All County-Assistance & SEHA 6004", "T", "2025-09-01", None, "O1", "No", ""),
     ]
     df = pd.DataFrame(rows)
-    df = clean_offices(df)
-    assert (df[OFFICE_COL] == "Unassigned").all()
-    print("  PASS: nan_office_handling")
+    kept, excluded = exclude_programs(df)
+    assert len(excluded) == 2, f"Expected 2 excluded, got {len(excluded)}"
+    assert len(kept) == 1, f"Expected 1 kept, got {len(kept)}"
+    assert kept.iloc[0]["Client ID"] == 2
+    print("  PASS: exclude_programs")
+
+
+def test_program_office_mapping():
+    """Program mapping should override CaseWorthy office; unmapped goes to needs attention."""
+    rows = [
+        # Known program — should map to Tampa Office - SSVF regardless of CaseWorthy office
+        make_row(1, 100, "Tampa-VA Sup Services-P3-SSVF-Prevention 1010", "T", "2025-09-01", None, "Wrong Office", "No", ""),
+        # Known program with NaN office — should still get mapped
+        make_row(2, 200, "Polk-CoC-Returning Home 1050", "T", "2025-09-01", None, np.nan, "No", ""),
+        # Unknown program — should go to unmapped
+        make_row(3, 300, "Some Unknown Program", "T", "2025-09-01", None, "O1", "No", ""),
+    ]
+    df = pd.DataFrame(rows)
+    mapped, unmapped = apply_program_office_mapping(df)
+
+    assert len(mapped) == 2
+    assert len(unmapped) == 1
+    assert mapped.iloc[0][OFFICE_COL] == "Tampa Office - SSVF"
+    assert mapped.iloc[1][OFFICE_COL] == "Lakeland Office"
+    assert unmapped.iloc[0][PROGRAM_COL] == "Some Unknown Program"
+    print("  PASS: program_office_mapping")
 
 
 if __name__ == "__main__":
@@ -173,5 +197,6 @@ if __name__ == "__main__":
     test_classify()
     test_backlog_at_date()
     test_monthly_table()
-    test_nan_office_handling()
+    test_exclude_programs()
+    test_program_office_mapping()
     print("\nAll tests passed!")

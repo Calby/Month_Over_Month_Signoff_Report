@@ -3,7 +3,8 @@ import numpy as np
 from config import (
     BASELINE_DATE, DEDUP_KEYS, SIGNOFF_DATE_COL, BEGIN_DATE_COL,
     OFFICE_COL, REVIEWED_COL, STATUS_COL, APPROVED_STATUS,
-    PENDING_STATUS_CONTAINS, DATE_COLUMNS,
+    PENDING_STATUS_CONTAINS, DATE_COLUMNS, PROGRAM_COL,
+    EXCLUDED_PROGRAMS, PROGRAM_TO_OFFICE,
 )
 
 
@@ -38,10 +39,27 @@ def classify(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def clean_offices(df: pd.DataFrame) -> pd.DataFrame:
-    """Replace NaN office with 'Unassigned'."""
-    df[OFFICE_COL] = df[OFFICE_COL].fillna("Unassigned")
-    return df
+def exclude_programs(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Remove excluded programs. Returns (kept, excluded)."""
+    mask = df[PROGRAM_COL].isin(EXCLUDED_PROGRAMS)
+    return df[~mask].reset_index(drop=True), df[mask].reset_index(drop=True)
+
+
+def apply_program_office_mapping(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Map program names to offices. Returns (mapped_df, unmapped_df).
+
+    Records whose program is in PROGRAM_TO_OFFICE get that office assigned
+    (overriding whatever CaseWorthy had). Records whose program is NOT in the
+    mapping are separated out as 'needs attention' for manual review.
+    """
+    known = df[PROGRAM_COL].isin(PROGRAM_TO_OFFICE)
+    mapped_df = df[known].copy()
+    unmapped_df = df[~known].copy()
+
+    # Override office from the mapping
+    mapped_df[OFFICE_COL] = mapped_df[PROGRAM_COL].map(PROGRAM_TO_OFFICE)
+
+    return mapped_df.reset_index(drop=True), unmapped_df.reset_index(drop=True)
 
 
 def _backlog_at_date(df: pd.DataFrame, d: pd.Timestamp) -> pd.Series:
@@ -147,18 +165,33 @@ def build_monthly_table(df: pd.DataFrame) -> dict:
 
 
 def process_data(filepath: str) -> dict:
-    """Full pipeline: load → dedup → classify → build monthly table."""
+    """Full pipeline: load → dedup → exclude → map offices → classify → build."""
     df = load_data(filepath)
     print(f"  Loaded: {len(df):,} rows")
     df = deduplicate(df)
     print(f"  After dedup: {len(df):,} rows")
+
+    # Exclude programs not tracked for sign-off
+    df, excluded = exclude_programs(df)
+    print(f"  Excluded programs: {len(excluded):,} rows")
+
+    # Apply program → office mapping; separate unmapped records
+    df, unmapped = apply_program_office_mapping(df)
+    print(f"  Mapped to offices: {len(df):,} rows")
+    print(f"  Unmapped (needs attention): {len(unmapped):,} rows")
+
     df = classify(df)
-    df = clean_offices(df)
+    # Classify unmapped too so the Needs Attention sheet has those columns
+    if len(unmapped) > 0:
+        unmapped = classify(unmapped)
+        unmapped[OFFICE_COL] = unmapped[OFFICE_COL].fillna("Unassigned")
+
     print(f"  Offices: {df[OFFICE_COL].nunique()}")
     print(f"  Signed off: {df['is_signed_off'].sum():,}")
     print(f"  Pending review: {df['is_pending_review'].sum():,}")
     print(f"  Needs sign-off: {df['needs_signoff'].sum():,}")
     result = build_monthly_table(df)
+    result["unmapped"] = unmapped
     print(f"  Baseline backlog (Aug 29): {result['baseline'].sum():,}")
     print(f"  Months in data: {len(result['months'])}")
     return result

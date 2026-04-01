@@ -59,5 +59,13 @@ assessment_tracker/
   - Updated Pending definition: sent back to case manager for review/changes
 - Month headers alternate between dark blue and lighter blue for visual separation
 
+- Added program-to-office mapping in config.py (overrides CaseWorthy Office Location)
+  - 70+ programs mapped to their correct office
+  - 12 SSVF-EHA + Bob Woodruff programs excluded from report entirely
+  - Records with unmapped programs go to a "Needs Attention" sheet
+  - Needs Attention sheet includes instructions for CaseWorthy cleanup
+- Removed "Unassigned" catch-all — office is now determined by program name
+- Added tests for exclusion and mapping logic
+
 ## Future Plans
 - Package as standalone .exe using PyInstaller so end users don't need Python installed

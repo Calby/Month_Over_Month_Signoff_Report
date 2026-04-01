@@ -10,7 +10,14 @@ from report_builder import build_report
 # Generate a small synthetic CaseWorthy export
 np.random.seed(42)
 offices = ["Downtown", "Northside", "Eastside", "Westside", "Unassigned"]
-programs = ["SNAP", "Medicaid", "TANF"]
+# Mix of mapped programs, excluded programs, and unknown programs
+programs = [
+    "Tampa-VA Sup Services-P3-SSVF-Prevention 1010",   # mapped → Tampa Office - SSVF
+    "Polk-CoC-Returning Home 1050",                     # mapped → Lakeland Office
+    "Sarasota-VA Sup Services-SSVF-Prevention 1010",    # mapped → Sarasota Office
+    "Charlotte-VA Supportive Services-SSVF-EHA",        # excluded
+    "Some Unknown Program",                              # unmapped → Needs Attention
+]
 types = ["Program Enrollment", "Program Exit", "90 Day/Annual Recert or Update"]
 statuses = [
     ("Yes", "Approved Eligibility Determination"),
@@ -64,6 +71,18 @@ assert "Office Detail" in sheets
 assert "Raw Data" in sheets
 assert "Backlog Trend" not in sheets
 assert "Monthly Activity" not in sheets
+assert "Needs Attention" in sheets
+
+# Check Needs Attention sheet has the unmapped program
+ws_na = wb["Needs Attention"]
+found_unknown = False
+for row in ws_na.iter_rows(min_col=3, max_col=3):
+    for cell in row:
+        if cell.value == "Some Unknown Program":
+            found_unknown = True
+            break
+assert found_unknown, "Expected 'Some Unknown Program' in Needs Attention sheet"
+print("Needs Attention sheet: verified unmapped programs")
 
 # Check summary has totals row with formulas
 ws = wb["Summary"]
