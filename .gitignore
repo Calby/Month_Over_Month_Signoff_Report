@@ -2,6 +2,12 @@ __pycache__/
 *.pyc
 *.xlsx
 !requirements.txt
+!assessment_tracker/program_mapping.xlsx
+
+# PyInstaller
+assessment_tracker/build/
+assessment_tracker/dist/
+*.spec
 
 # Keep input/output folders but ignore data files inside them
 assessment_tracker/input/*

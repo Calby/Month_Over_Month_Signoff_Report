@@ -4,7 +4,7 @@ from config import (
     BASELINE_DATE, DEDUP_KEYS, SIGNOFF_DATE_COL, BEGIN_DATE_COL,
     OFFICE_COL, REVIEWED_COL, STATUS_COL, APPROVED_STATUS,
     PENDING_STATUS_CONTAINS, DATE_COLUMNS, PROGRAM_COL,
-    EXCLUDED_PROGRAMS, PROGRAM_TO_OFFICE,
+    load_program_mapping,
 )
 
 
@@ -39,31 +39,31 @@ def classify(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def exclude_programs(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+def exclude_programs(df: pd.DataFrame, excluded_list: list) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Remove excluded programs. Returns (kept, excluded)."""
-    mask = df[PROGRAM_COL].isin(EXCLUDED_PROGRAMS)
+    mask = df[PROGRAM_COL].isin(excluded_list)
     return df[~mask].reset_index(drop=True), df[mask].reset_index(drop=True)
 
 
-def apply_program_office_mapping(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+def apply_program_office_mapping(df: pd.DataFrame, mapping: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Assign offices using CaseWorthy first, then program mapping as fallback.
 
     Logic:
-    1. If the program is in PROGRAM_TO_OFFICE (known program):
+    1. If the program is in the mapping (known program):
        - Use CaseWorthy Office Location if present
        - Fall back to mapping if Office Location is missing/blank
-    2. If the program is NOT in PROGRAM_TO_OFFICE:
+    2. If the program is NOT in the mapping:
        - Separated as 'needs attention' for manual review
 
     Returns (mapped_df, unmapped_df).
     """
-    known = df[PROGRAM_COL].isin(PROGRAM_TO_OFFICE)
+    known = df[PROGRAM_COL].isin(mapping)
     mapped_df = df[known].copy()
     unmapped_df = df[~known].copy()
 
     # Only fill in the mapping where CaseWorthy office is missing
     office_missing = mapped_df[OFFICE_COL].isna() | (mapped_df[OFFICE_COL].astype(str).str.strip() == "")
-    mapped_df.loc[office_missing, OFFICE_COL] = mapped_df.loc[office_missing, PROGRAM_COL].map(PROGRAM_TO_OFFICE)
+    mapped_df.loc[office_missing, OFFICE_COL] = mapped_df.loc[office_missing, PROGRAM_COL].map(mapping)
 
     return mapped_df.reset_index(drop=True), unmapped_df.reset_index(drop=True)
 
@@ -170,19 +170,22 @@ def build_monthly_table(df: pd.DataFrame) -> dict:
     }
 
 
-def process_data(filepath: str) -> dict:
+def process_data(filepath: str, mapping_path: str | None = None) -> dict:
     """Full pipeline: load → dedup → exclude → map offices → classify → build."""
+    # Load program mapping from Excel config
+    program_to_office, excluded_programs = load_program_mapping(mapping_path)
+
     df = load_data(filepath)
     print(f"  Loaded: {len(df):,} rows")
     df = deduplicate(df)
     print(f"  After dedup: {len(df):,} rows")
 
     # Exclude programs not tracked for sign-off
-    df, excluded = exclude_programs(df)
+    df, excluded = exclude_programs(df, excluded_programs)
     print(f"  Excluded programs: {len(excluded):,} rows")
 
     # Apply program → office mapping; separate unmapped records
-    df, unmapped = apply_program_office_mapping(df)
+    df, unmapped = apply_program_office_mapping(df, program_to_office)
     print(f"  Mapped to offices: {len(df):,} rows")
     print(f"  Unmapped (needs attention): {len(unmapped):,} rows")
 
