@@ -60,10 +60,10 @@ wb = load_workbook(output)
 sheets = wb.sheetnames
 print(f"Sheets: {sheets}")
 assert "Summary" in sheets
-assert "Backlog Trend" in sheets
-assert "Monthly Activity" in sheets
 assert "Office Detail" in sheets
 assert "Raw Data" in sheets
+assert "Backlog Trend" not in sheets
+assert "Monthly Activity" not in sheets
 
 # Check summary has totals row with formulas
 ws = wb["Summary"]

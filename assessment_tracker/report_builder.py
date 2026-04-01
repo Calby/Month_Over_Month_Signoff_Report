@@ -172,9 +172,14 @@ def _build_summary_sheet(wb, data):
             cell.border = _thin_border
 
     # --- Legend / Instructions ---
+    # Determine last column of the data table for full-width merges
+    last_col = col - 1  # col was incremented past the last month
+    if last_col < 6:
+        last_col = 6
+
     legend_start = totals_row + 3
     ws.merge_cells(start_row=legend_start, start_column=1,
-                   end_row=legend_start, end_column=6)
+                   end_row=legend_start, end_column=last_col)
     lh = ws.cell(row=legend_start, column=1, value="Column Definitions")
     lh.font = Font(size=13, bold=True)
 
@@ -182,35 +187,38 @@ def _build_summary_sheet(wb, data):
         ("Baseline Backlog", "Number of assessments needing sign-off as of August 29, 2025 — the starting point for tracking."),
         ("New", "Assessments with a Begin Date in that month. These are newly created assessments entering the queue."),
         ("Signed Off", "Assessments approved (signed off) during that month, based on the Assessment.LastModifiedDate."),
-        ("Pending", "Assessments marked as reviewed but with a \"Pending Approval\" status — they are NOT fully signed off and still count toward the backlog."),
+        ("Pending", "Assessments that were sent back to the case manager for review or to make changes. These assessments have not been approved in the system and are still pending approval. They count toward the backlog."),
         ("End Backlog", "Total assessments still awaiting sign-off at the end of that month. This is the cumulative backlog."),
         ("Delta", "Change in backlog compared to the prior month. Negative values (green) = backlog is shrinking. Positive values (red) = backlog is growing."),
     ]
 
+    wrap_alignment = Alignment(wrap_text=True, vertical="top")
     for i, (term, desc) in enumerate(definitions):
         r = legend_start + 1 + i
         tc = ws.cell(row=r, column=1, value=term)
         tc.font = _bold_font
-        ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=6)
-        ws.cell(row=r, column=2, value=desc)
+        tc.alignment = Alignment(vertical="top")
+        ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=last_col)
+        desc_cell = ws.cell(row=r, column=2, value=desc)
+        desc_cell.alignment = wrap_alignment
 
     color_start = legend_start + len(definitions) + 2
     ws.merge_cells(start_row=color_start, start_column=1,
-                   end_row=color_start, end_column=6)
+                   end_row=color_start, end_column=last_col)
     ch = ws.cell(row=color_start, column=1, value="Color Key")
     ch.font = Font(size=13, bold=True)
 
     gr = ws.cell(row=color_start + 1, column=1, value="   ")
     gr.fill = _green_fill
     ws.merge_cells(start_row=color_start + 1, start_column=2,
-                   end_row=color_start + 1, end_column=6)
+                   end_row=color_start + 1, end_column=last_col)
     ws.cell(row=color_start + 1, column=2,
             value="Green — Backlog decreased from the prior month (improvement)")
 
     rr = ws.cell(row=color_start + 2, column=1, value="   ")
     rr.fill = _red_fill
     ws.merge_cells(start_row=color_start + 2, start_column=2,
-                   end_row=color_start + 2, end_column=6)
+                   end_row=color_start + 2, end_column=last_col)
     ws.cell(row=color_start + 2, column=2,
             value="Red — Backlog increased from the prior month (falling behind)")
 
@@ -223,100 +231,6 @@ def _build_summary_sheet(wb, data):
             ws.column_dimensions[get_column_letter(c + offset)].width = METRIC_COL_WIDTH
 
     ws.freeze_panes = "B6"
-
-
-def _build_trend_chart_sheet(wb, data):
-    """Sheet 2: Backlog Trend line chart (top 10 offices)."""
-    ws = wb.create_sheet("Backlog Trend")
-
-    offices = data["offices"]
-    baseline = data["baseline"]
-    months = data["months"]
-    monthly_data = data["monthly_data"]
-
-    # Top 10 by baseline backlog
-    top10 = baseline.sort_values(ascending=False).head(10).index.tolist()
-    num_rows = len(top10)
-    num_time_points = 1 + len(months)  # baseline + each month
-
-    # Data table in COLUMN layout (openpyxl charts work best this way)
-    # Col A = time labels, Col B = office 1, Col C = office 2, etc.
-    ws.cell(row=1, column=1, value="Month")
-    for i, office in enumerate(top10):
-        ws.cell(row=1, column=2 + i, value=office)
-
-    # Row 2 = baseline
-    ws.cell(row=2, column=1, value="Aug 29 Baseline")
-    for i, office in enumerate(top10):
-        ws.cell(row=2, column=2 + i, value=int(baseline[office]))
-
-    # Rows 3+ = each month
-    for m_idx, (year, month) in enumerate(months):
-        row = 3 + m_idx
-        ws.cell(row=row, column=1, value=_month_label(year, month))
-        for i, office in enumerate(top10):
-            ws.cell(row=row, column=2 + i,
-                    value=int(monthly_data[(year, month)]["eom_backlog"][office]))
-
-    last_data_row = 2 + len(months)
-    last_data_col = 1 + num_rows
-
-    chart = LineChart()
-    chart.title = "Backlog Trend by Office"
-    chart.style = 10
-    chart.y_axis.title = "End-of-Month Backlog"
-    chart.x_axis.title = "Month"
-    chart.width = 28
-    chart.height = 16
-
-    # Categories = month labels in col A
-    cats = Reference(ws, min_col=1, min_row=2, max_row=last_data_row)
-    # Data = each office column (with header as series name)
-    data_ref = Reference(ws, min_col=2, max_col=last_data_col,
-                         min_row=1, max_row=last_data_row)
-    chart.add_data(data_ref, titles_from_data=True)
-    chart.set_categories(cats)
-
-    chart_row = last_data_row + 2
-    ws.add_chart(chart, f"A{chart_row}")
-
-
-def _build_activity_chart_sheet(wb, data):
-    """Sheet 3: Monthly Activity bar chart — New vs Signed Off."""
-    ws = wb.create_sheet("Monthly Activity")
-
-    months = data["months"]
-    monthly_data = data["monthly_data"]
-
-    # Data table
-    ws.cell(row=1, column=1, value="Month")
-    ws.cell(row=1, column=2, value="New Assessments")
-    ws.cell(row=1, column=3, value="Signed Off")
-
-    for i, (year, month) in enumerate(months):
-        row = 2 + i
-        ws.cell(row=row, column=1, value=_month_label(year, month))
-        ws.cell(row=row, column=2, value=int(monthly_data[(year, month)]["new"].sum()))
-        ws.cell(row=row, column=3, value=int(monthly_data[(year, month)]["signed_off"].sum()))
-
-    last_data_row = 1 + len(months)
-
-    chart = BarChart()
-    chart.type = "col"
-    chart.grouping = "clustered"
-    chart.title = "New vs Signed Off — All Offices Combined"
-    chart.y_axis.title = "Count"
-    chart.x_axis.title = "Month"
-    chart.width = 24
-    chart.height = 14
-
-    cats = Reference(ws, min_col=1, min_row=2, max_row=last_data_row)
-    data_ref = Reference(ws, min_col=2, max_col=3, min_row=1, max_row=last_data_row)
-    chart.add_data(data_ref, titles_from_data=True)
-    chart.set_categories(cats)
-
-    chart_row = last_data_row + 2
-    ws.add_chart(chart, f"A{chart_row}")
 
 
 def _build_detail_sheet(wb, data):
@@ -374,6 +288,15 @@ def _build_raw_data_sheet(wb, data):
                 val = val.strftime("%Y-%m-%d %H:%M:%S") if val.hour else val.strftime("%Y-%m-%d")
             ws.cell(row=r_idx, column=c_idx, value=val)
 
+    # Auto-fit column widths based on content
+    for c_idx, col_name in enumerate(columns, start=1):
+        max_len = len(str(col_name))
+        for r_idx in range(2, min(len(filtered) + 2, 200)):  # sample first ~200 rows
+            val = ws.cell(row=r_idx, column=c_idx).value
+            if val is not None:
+                max_len = max(max_len, len(str(val)))
+        ws.column_dimensions[get_column_letter(c_idx)].width = min(max_len + 3, 40)
+
     ws.freeze_panes = "A2"
     ws.auto_filter.ref = ws.dimensions
 
@@ -383,8 +306,6 @@ def build_report(data: dict, output_dir: str | None = None) -> str:
     wb = Workbook()
 
     _build_summary_sheet(wb, data)
-    _build_trend_chart_sheet(wb, data)
-    _build_activity_chart_sheet(wb, data)
     _build_detail_sheet(wb, data)
     _build_raw_data_sheet(wb, data)
 
