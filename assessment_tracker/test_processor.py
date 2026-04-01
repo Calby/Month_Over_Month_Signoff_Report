@@ -163,7 +163,11 @@ def test_exclude_programs():
         make_row(3, 300, "Bob Woodruff-All County-Assistance & SEHA 6004", "T", "2025-09-01", None, "O1", "No", ""),
     ]
     df = pd.DataFrame(rows)
-    kept, excluded = exclude_programs(df)
+    excluded_list = [
+        "Charlotte-VA Supportive Services-SSVF-EHA",
+        "Bob Woodruff-All County-Assistance & SEHA 6004",
+    ]
+    kept, excluded = exclude_programs(df, excluded_list)
     assert len(excluded) == 2, f"Expected 2 excluded, got {len(excluded)}"
     assert len(kept) == 1, f"Expected 1 kept, got {len(kept)}"
     assert kept.iloc[0]["Client ID"] == 2
@@ -183,7 +187,12 @@ def test_program_office_mapping():
         make_row(4, 400, "Some Unknown Program", "T", "2025-09-01", None, "O1", "No", ""),
     ]
     df = pd.DataFrame(rows)
-    mapped, unmapped = apply_program_office_mapping(df)
+    test_mapping = {
+        "Tampa-VA Sup Services-P3-SSVF-Prevention 1010": "Tampa Office - SSVF",
+        "Polk-CoC-Returning Home 1050": "Lakeland Office",
+        "Sarasota-CoC-Returning Home 1051": "Sarasota Office",
+    }
+    mapped, unmapped = apply_program_office_mapping(df, test_mapping)
 
     assert len(mapped) == 3
     assert len(unmapped) == 1

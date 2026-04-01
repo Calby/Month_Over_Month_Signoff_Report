@@ -14,12 +14,14 @@ assessment_tracker/
 ├── main.py              # Entry point — file picker, runs pipeline, opens output
 ├── processor.py         # Data logic: load, dedup, classify, monthly backlog calc
 ├── report_builder.py    # Excel output: Summary, Office Detail, Raw Data sheets
-├── config.py            # Constants: column names, baseline date, colors
-├── requirements.txt     # pandas, openpyxl
-├── input/               # Drop CaseWorthy exports here
-├── output/              # Generated reports saved here
-├── test_processor.py    # Unit tests for dedup, classification, backlog logic
-└── test_e2e.py          # End-to-end smoke test with synthetic data
+├── config.py              # Constants, path helpers, mapping loader
+├── program_mapping.xlsx   # Editable: program→office mapping + exclusion list
+├── build_exe.py           # PyInstaller build script to create .exe
+├── requirements.txt       # pandas, openpyxl
+├── input/                 # Drop CaseWorthy exports here
+├── output/                # Generated reports saved here
+├── test_processor.py      # Unit tests for dedup, classification, backlog logic
+└── test_e2e.py            # End-to-end smoke test with synthetic data
 ```
 
 ### Data Pipeline
@@ -70,5 +72,15 @@ assessment_tracker/
 - Removed "Unassigned" catch-all — office is now determined by program name
 - Added tests for exclusion and mapping logic
 
+- Moved program mapping and exclusions to external `program_mapping.xlsx`
+  - Mapping sheet: Program Name → Office Location (editable by non-developers)
+  - Excluded sheet: programs removed from report entirely
+  - config.py now loads mapping at runtime via `load_program_mapping()`
+- Added PyInstaller build script (`build_exe.py`)
+  - Produces standalone .exe — no Python install needed
+  - Copies mapping file, creates input/output folders in dist
+  - `get_app_dir()` handles path resolution for both script and exe modes
+- Updated HOW_TO_RUN.md with exe instructions and mapping management guide
+
 ## Future Plans
-- Package as standalone .exe using PyInstaller so end users don't need Python installed
+- Build and test .exe on Windows with PyInstaller
