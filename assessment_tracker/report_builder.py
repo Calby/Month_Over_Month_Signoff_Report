@@ -301,6 +301,66 @@ def _build_raw_data_sheet(wb, data):
     ws.auto_filter.ref = ws.dimensions
 
 
+def _build_needs_attention_sheet(wb, data):
+    """Sheet: Needs Attention — unmapped programs that need office assignment."""
+    unmapped = data.get("unmapped")
+    if unmapped is None or len(unmapped) == 0:
+        return
+
+    ws = wb.create_sheet("Needs Attention")
+
+    # Instructions at top
+    _warn_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=8)
+    title = ws.cell(row=1, column=1,
+                    value="Assessments Not Included in Report — Program Not Mapped to an Office")
+    title.font = Font(size=13, bold=True)
+    title.fill = _warn_fill
+
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=8)
+    ws.cell(row=2, column=1,
+            value="These records have a Program Name that is not in the program-to-office mapping. "
+                  "Please update the office location in CaseWorthy or add the program to the mapping in config.py.")
+    ws.cell(row=2, column=1).alignment = Alignment(wrap_text=True)
+    ws.row_dimensions[2].height = 36
+
+    columns = [
+        "Client ID", "AssessmentID", "Program Name", "Type of Assessment",
+        "Begin Date", "Assessment.LastModifiedDate", "Office Location",
+        "Program Reviewed", "Program Review Status",
+        "is_signed_off", "is_pending_review", "needs_signoff",
+    ]
+    columns = [c for c in columns if c in unmapped.columns]
+
+    header_row = 4
+    for i, h in enumerate(columns, start=1):
+        c = ws.cell(row=header_row, column=i, value=h)
+        c.fill = _dark_fill
+        c.font = _white_bold
+        c.border = _thin_border
+
+    for r_idx, (_, row) in enumerate(unmapped.iterrows(), start=header_row + 1):
+        for c_idx, col in enumerate(columns, start=1):
+            val = row[col]
+            if pd.isna(val):
+                val = ""
+            elif isinstance(val, pd.Timestamp):
+                val = val.strftime("%Y-%m-%d %H:%M:%S") if val.hour else val.strftime("%Y-%m-%d")
+            ws.cell(row=r_idx, column=c_idx, value=val)
+
+    # Auto-fit columns
+    for c_idx, col_name in enumerate(columns, start=1):
+        max_len = len(str(col_name))
+        for r_idx in range(header_row + 1, min(len(unmapped) + header_row + 1, 200)):
+            val = ws.cell(row=r_idx, column=c_idx).value
+            if val is not None:
+                max_len = max(max_len, len(str(val)))
+        ws.column_dimensions[get_column_letter(c_idx)].width = min(max_len + 3, 50)
+
+    ws.freeze_panes = f"A{header_row + 1}"
+    ws.auto_filter.ref = f"A{header_row}:{get_column_letter(len(columns))}{header_row + len(unmapped)}"
+
+
 def build_report(data: dict, output_dir: str | None = None) -> str:
     """Build the full Excel workbook and return the output path."""
     wb = Workbook()
@@ -308,6 +368,7 @@ def build_report(data: dict, output_dir: str | None = None) -> str:
     _build_summary_sheet(wb, data)
     _build_detail_sheet(wb, data)
     _build_raw_data_sheet(wb, data)
+    _build_needs_attention_sheet(wb, data)
 
     datestamp = datetime.now().strftime("%Y%m%d")
     filename = f"Assessment_SignOff_Tracker_{datestamp}.xlsx"
