@@ -82,5 +82,176 @@ assessment_tracker/
   - `get_app_dir()` handles path resolution for both script and exe modes
 - Updated HOW_TO_RUN.md with exe instructions and mapping management guide
 
+### 2026-04-02
+- Replaced bare file picker with full GUI application window
+  - Input file browser, output folder selector, mapping status indicator
+  - Progress bar with threaded processing (UI stays responsive)
+  - Generate Report button, success/error dialogs
+  - Footer credit line
+- Rebuilt as standalone .exe via PyInstaller
+
 ## Future Plans
 - Build and test .exe on Windows with PyInstaller
+
+---
+
+## GUI App Design Reference
+
+Reusable pattern for building similar tkinter data-processing apps.
+Copy this structure and adapt the fields/processing logic.
+
+### Layout Structure
+
+```
+┌─────────────────────────────────────────────────┐
+│  HEADER (accent color banner)                   │
+│    Title — large bold white text                │
+│    Subtitle — lighter, smaller text             │
+├─────────────────────────────────────────────────┤
+│  BODY (light background, padded)                │
+│                                                 │
+│  Input File Label (bold)                        │
+│  [ text entry field          ] [Browse...]      │
+│                                                 │
+│  Output Folder Label (bold)                     │
+│  [ text entry field          ] [Browse...]      │
+│                                                 │
+│  Status indicator (green check / warning)       │
+│                                                 │
+│  [========= progress bar =========]             │
+│  Status text ("Ready" / "Processing...")        │
+│                                                 │
+│                        [ Generate Report ]      │
+├─────────────────────────────────────────────────┤
+│  FOOTER (subtle background)                     │
+│    Credit / version text (italic, small)        │
+└─────────────────────────────────────────────────┘
+```
+
+### Color Palette
+
+| Element | Color | Hex |
+|---------|-------|-----|
+| Header / accent / primary button | Dark blue | `#1F4E79` |
+| Button hover / active | Medium blue | `#2E75B6` |
+| Body background | Light gray-blue | `#F0F4F8` |
+| Footer background | Slightly darker gray | `#E8EDF2` |
+| Success text | Green | `#2E7D32` |
+| Error / warning text | Red | `#C62828` |
+| Muted text (status, footer) | Gray | `#555` / `#666` |
+
+### Fonts
+
+| Element | Font |
+|---------|------|
+| Title | `("Segoe UI", 16, "bold")` |
+| Subtitle | `("Segoe UI", 10)` |
+| Section labels | `("Segoe UI", 10, "bold")` |
+| Input fields / body text | `("Segoe UI", 9)` |
+| Button text | `("Segoe UI", 11, "bold")` |
+| Footer | `("Segoe UI", 8, "italic")` |
+
+### Key Implementation Details
+
+**Window setup:**
+```python
+root = tk.Tk()
+root.title("App Title")
+root.resizable(False, False)
+root.configure(bg="#F0F4F8")
+```
+
+**Header (accent banner):**
+```python
+header = tk.Frame(root, bg="#1F4E79", padx=20, pady=14)
+header.pack(fill="x")
+tk.Label(header, text="App Title",
+         font=("Segoe UI", 16, "bold"), fg="white", bg="#1F4E79").pack()
+tk.Label(header, text="Subtitle description",
+         font=("Segoe UI", 10), fg="#B0C4DE", bg="#1F4E79").pack()
+```
+
+**Browse row pattern (input file or output folder):**
+```python
+tk.Label(body, text="Label:", font=("Segoe UI", 10, "bold"),
+         bg=bg, anchor="w").grid(row=R, column=0, columnspan=2, sticky="w")
+frame = tk.Frame(body, bg=bg)
+frame.grid(row=R+1, column=0, columnspan=2, sticky="ew")
+var = tk.StringVar()
+tk.Entry(frame, textvariable=var, width=52, font=("Segoe UI", 9)).pack(side="left", padx=(0, 8))
+tk.Button(frame, text="Browse...", command=browse_fn, font=("Segoe UI", 9)).pack(side="left")
+```
+
+**Progress bar + status:**
+```python
+progress = ttk.Progressbar(body, mode="indeterminate", length=380)
+progress.grid(...)
+status_var = tk.StringVar(value="Ready")
+tk.Label(body, textvariable=status_var, font=("Segoe UI", 9), bg=bg, fg="#555").grid(...)
+# Start: progress.start(15)
+# Stop:  progress.stop()
+```
+
+**Primary action button (right-aligned):**
+```python
+btn = tk.Button(frame, text="Generate Report",
+                command=run_fn, font=("Segoe UI", 11, "bold"),
+                bg="#1F4E79", fg="white", padx=20, pady=6,
+                activebackground="#2E75B6", activeforeground="white")
+btn.pack(side="right")
+```
+
+**Footer:**
+```python
+footer = tk.Frame(root, bg="#E8EDF2", padx=20, pady=8)
+footer.pack(fill="x", side="bottom")
+tk.Label(footer, text="Credit line here",
+         font=("Segoe UI", 8, "italic"), fg="#666", bg="#E8EDF2").pack()
+```
+
+**Threaded processing (keeps UI responsive):**
+```python
+def _run(self):
+    self.run_btn.config(state="disabled")
+    self.progress.start(15)
+    self.status_var.set("Processing...")
+    thread = threading.Thread(target=self._process, args=(...,), daemon=True)
+    thread.start()
+
+def _process(self, ...):
+    try:
+        # ... do work ...
+        self.root.after(0, self._on_success, result)
+    except Exception as e:
+        self.root.after(0, self._on_error, str(e))
+
+def _on_success(self, result):
+    self.progress.stop()
+    self.status_var.set("Done")
+    self.run_btn.config(state="normal")
+    messagebox.askyesno("Done", "Open the result?")
+
+def _on_error(self, msg):
+    self.progress.stop()
+    self.status_var.set("Error")
+    self.run_btn.config(state="normal")
+    messagebox.showerror("Error", msg)
+```
+
+### PyInstaller Build
+
+```python
+# build_exe.py key flags:
+"--onefile"     # single .exe
+"--windowed"    # no console window (GUI app)
+"--name", "App_Name"
+```
+
+After build, copy config files (xlsx, json, etc.) next to the exe.
+Use `get_app_dir()` to resolve paths at runtime:
+```python
+def get_app_dir():
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)  # PyInstaller exe
+    return os.path.dirname(os.path.abspath(__file__))  # normal script
+```
